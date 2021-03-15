@@ -64,11 +64,16 @@ function cfg = initPTB(cfg)
 
     % Make sure we have black splash screen
     Screen('Preference', 'VisualDebugLevel', 1);
-
+    
+    % skip sync tests 
+    cfg.skipSyncTests = 1;
+    Screen('Preference', 'SkipSyncTests', cfg.skipSyncTests);
+    
     % Get the screen numbers and draw to the external screen if avaliable
     cfg.screen.idx = max(Screen('Screens'));
 
-    if isfield(cfg.screen, 'resolution')
+    if isfield(cfg.screen, 'resolution') && ...
+            ~any(cellfun(@isempty,cfg.screen.resolution))
         [newWidth, newHeight, newHz] = deal(cfg.screen.resolution{:});
         cfg.screen.oldResolution = Screen('Resolution', cfg.screen.idx, ...
                                           newWidth, newHeight, newHz);
@@ -156,6 +161,8 @@ function initDebug(cfg)
 
     if cfg.debug.transpWin
         PsychDebugWindowConfiguration;
+    else
+        clear Screen
     end
 
 end
@@ -184,11 +191,9 @@ function cfg = initAudio(cfg)
 
             % find output device to use
             idx = find( ...
-                       audioDev.NrInputChannels == cfg.audio.inputChannels && ...
-                       audioDev.NrOutputChannels == cfg.audio.channels && ...
-                       ~cellfun(@isempty, regexp({audioDev.HostAudioAPIName}, ...
-                                                 cfg.audio.deviceName)));
-
+                ~cellfun(@isempty, regexp({audioDev.DeviceName},...
+                                          cfg.audio.deviceName)));
+            
             % save device ID
             cfg.audio.devIdx = audioDev(idx).DeviceIndex;
 
@@ -208,11 +213,16 @@ function cfg = initAudio(cfg)
         % at the begining of the experiment)
         PsychPortAudio('Volume', cfg.audio.pahandle, cfg.audio.initVolume);
 
-        cfg.audio.pushSize  = cfg.audio.fs * 0.010; % ! push N ms only
-
-        cfg.audio.requestOffsetTime = 1; % offset 1 sec
-        cfg.audio.reqsSampleOffset = cfg.audio.requestOffsetTime * cfg.audio.fs;
-
+        % if we're doing capture, we need to initialize buffer with enough space
+        if cfg.audio.playbackMode~=1
+            % allocate N-s buffer
+            bufferSamples = round(cfg.audio.fs * cfg.audio.tapBuffDur); 
+            % preallocate tapping buffer
+            PsychPortAudio('GetAudioData', ...
+                            cfg.audio.pahandle, ...
+                            bufferSamples); 
+        end
+        
     end
 end
 
